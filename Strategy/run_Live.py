@@ -22,7 +22,8 @@ from nautilus_trader.live.node import TradingNode
 from nautilus_trader.model import TraderId
 from nautilus_trader.model.data import BarType
 from nautilus_trader.model.identifiers import InstrumentId
-from nautilus_trader.backtest.engine import Decimal
+# Исправленный импорт Decimal - используем стандартный модуль decimal
+from decimal import Decimal
 
 from strategy import Strategy, StrategyConfig
 
@@ -42,9 +43,12 @@ def build_node() -> TradingNode:
     product_type = BybitProductType.LINEAR
     symbol = f"{settings.symbol}-{product_type.value.upper()}"
 
-        # Strategy configuration -------------------------------------------------
+    # Strategy configuration -------------------------------------------------
+    # Создаем InstrumentId напрямую
+    instrument_id = InstrumentId.from_str(f"{symbol}.BYBIT")
+
     strat_config = StrategyConfig(
-        instrument=InstrumentId.from_str(f"{symbol}.BYBIT"),
+        instrument_id=instrument_id,  # Передаем instrument_id вместо instrument
         primary_bar_type=BarType.from_str(f"{symbol}.BYBIT-1-MINUTE-LAST-EXTERNAL"),
         trade_size=Decimal(settings.trade_size),  # taken from settings
     )
@@ -61,24 +65,24 @@ def build_node() -> TradingNode:
         ),
         data_clients={
             "BYBIT": BybitDataClientConfig(
-                    api_key=settings.api_key,
-                    api_secret=settings.api_secret,
-                    base_url_http=None,
-                    instrument_provider=instrument_provider_cfg,
+                api_key=settings.api_key,
+                api_secret=settings.api_secret,
+                base_url_http=None,
+                instrument_provider=instrument_provider_cfg,
                 product_types=[product_type],
-                    testnet=False,
+                testnet=False,
             ),
         },
         exec_clients={
             "BYBIT": BybitExecClientConfig(
-                    api_key=settings.api_key,
-                    api_secret=settings.api_secret,
-                    base_url_http=None,
-                    base_url_ws_private=None,
-                    instrument_provider=instrument_provider_cfg,
-                    product_types=[product_type],
-                    testnet=False,
-                    max_retries=5,
+                api_key=settings.api_key,
+                api_secret=settings.api_secret,
+                base_url_http=None,
+                base_url_ws_private=None,
+                instrument_provider=instrument_provider_cfg,
+                product_types=[product_type],
+                testnet=False,
+                max_retries=5,
 
             ),
         },
@@ -89,7 +93,7 @@ def build_node() -> TradingNode:
         timeout_post_stop=settings.timeout_post_stop,
     )
 
-        # Build and return the node ---------------------------------------------
+    # Build and return the node ---------------------------------------------
     node = TradingNode(config=node_config)
     node.trader.add_strategy(Strategy(config=strat_config))
     node.add_data_client_factory("BYBIT", BybitLiveDataClientFactory)
@@ -113,4 +117,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

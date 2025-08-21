@@ -68,16 +68,12 @@ if __name__ == "__main__":
     # 4. Configure and run strategy
     # ----------------------------------------------------------------------------------
 
-    # Create strategy configuration
+    # Create strategy configuration with proper warmup_bars
     strategy_config = StrategyConfig(
-        instrument=_instrument,
+        instrument_id=_instrument.id,  # Используем instrument.id вместо всего объекта instrument
         primary_bar_type=_1min_bartype,
         trade_size=Decimal(settings.trade_size),  # taken from settings
-        profit_in_ticks=20,
-        stoploss_in_ticks=20,
-        model_path='./model.pth',       # Путь к обученной модели
-        state_window=50,                # Окно исторических данных для состояния
-        action_dim=3,                   # 0=hold, 1=buy, 2=sell
+        warmup_bars=35  # Минимальное количество баров для расчета MACD(12,26,9)
     )
 
     # Create and register the strategy
