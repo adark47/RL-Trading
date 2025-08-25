@@ -57,14 +57,21 @@ class PathConfig(BaseModel):
 
 
 class DataConfig(BaseModel):
-    expected_channels: List[str] = ['open', 'high', 'low', 'close', 'volume', 'macd', 'macd_signal', 'macd_hist', 'rsi', 'bb_upper', 'bb_mid', 'bb_lower', 'hma_fast', 'hma_slow', 'atr']
+    expected_channels: List[str] = ["open", "high", "low", "close", "volume"]
+#    expected_channels: List[str] = ['open', 'high', 'low', 'close', 'volume', 'macd', 'macd_signal', 'macd_hist', 'rsi', 'bb_upper', 'bb_mid', 'bb_lower', 'hma_fast', 'hma_slow', 'atr']
 #    expected_channels: List[str] = ["open", "high", "volume_weighted_average", "low", "close", "volume", "num_trades"]
+
     data_channels: List[str] = expected_channels.copy()
+
     price_channels: List[str] = ['open', 'high', 'low', 'close']
 #    price_channels: List[str] = ["open", "high", "volume_weighted_average", "low", "close"]
+
     volume_channels: List[str] = ["volume"]
 #    volume_channels: List[str] = ["volume", "num_trades"]
-    other_channels: List[str] = ['macd', 'macd_signal', 'macd_hist', 'rsi', 'bb_upper', 'bb_mid', 'bb_lower', 'hma_fast', 'hma_slow', 'atr']
+
+#    other_channels: List[str] = ['macd', 'macd_signal', 'macd_hist', 'rsi', 'bb_upper', 'bb_mid', 'bb_lower', 'hma_fast', 'hma_slow', 'atr']
+
+    other_channels: List[str] = []
     plot_examples: int = 1
     plot_channel_idx: int = 4
 

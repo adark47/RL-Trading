@@ -13,5 +13,8 @@ output/
 data/logs/
 data/arcticdb_storage/
 data/data.csv
+data_/logs/
+data_/arcticdb_storage/
+data_/data.csv
 
 

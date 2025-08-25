@@ -1,36 +1,25 @@
-# data/read_npz.py
-
 import numpy as np
 import os
-import sys
-from loguru import logger
-import tabulate
-
-# Настройка логгера с цветами для разных уровней
-logger.remove()  # Удаляем стандартный обработчик
-logger.add(sys.stderr,
-           format="<green>{time:YYYY-MM-DD HH:mm:ss}</green> | <level>{level: <8}</level> | <cyan>{message}</cyan>",
-           colorize=True,
-           level="INFO")
+from termcolor import colored
 
 
-def inspect_npz_file(file_path, max_rows=10, max_cols=5, show_all_columns=False):
+def inspect_npz_file(file_path, max_rows=10, max_cols=5):
     """Просматривает содержимое .npz файла и выводит первые элементы массивов"""
     if not os.path.exists(file_path):
-        logger.error(f"❌ Файл не найден: {file_path}")
+        print(colored(f"❌ Файл не найден: {file_path}", "red"))
         return False
 
     try:
         # Загружаем файл с поддержкой объектов
         data = np.load(file_path, allow_pickle=True)
 
-        logger.info(f"\n{'=' * 50}")
-        logger.info(f"Файл: {file_path}")
-        logger.info(f"{'=' * 50}")
+        print(colored(f"\n{'=' * 50}", "blue"))
+        print(colored(f"Файл: {file_path}", "blue", attrs=["bold"]))
+        print(colored(f"{'=' * 50}", "blue"))
 
         # Проверяем, есть ли данные в файле
         if len(data.files) == 0:
-            logger.warning("⚠️  Файл пустой, массивы не найдены")
+            print(colored("⚠️  Файл пустой, массивы не найдены", "yellow"))
             data.close()
             return True
 
@@ -39,100 +28,64 @@ def inspect_npz_file(file_path, max_rows=10, max_cols=5, show_all_columns=False)
             array = data[key]
             shape = array.shape
 
-            logger.success(f"\nМассив: '{key}'")
-            logger.info(f"  • Форма данных: {shape}")
-            logger.info(f"  • Тип данных: {array.dtype}")
-            logger.info(f"  • Размер: {array.size} элементов")
+            print(colored(f"\nМассив: '{key}'", "green", attrs=["bold"]))
+            print(colored(f"  • Форма данных: {shape}", "cyan"))
+            print(colored(f"  • Тип данных: {array.dtype}", "cyan"))
+            print(colored(f"  • Размер: {array.size} элементов", "cyan"))
 
             # Случай 1: Пустой массив
             if array.size == 0:
-                logger.warning("  • Содержимое: пустой массив")
+                print(colored("  • Содержимое: пустой массив", "yellow"))
                 continue
 
             # Случай 2: Одномерный массив
             if array.ndim == 1:
                 sample = array[:max_rows]
-                logger.info(f"  • Первые {min(max_rows, len(sample))} элементов:")
-                logger.info(f"    {sample}")
+                print(colored(f"  • Первые {min(max_rows, len(sample))} элементов:", "magenta"))
+                print(f"    {sample}")
 
             # Случай 3: Двумерный массив (наиболее вероятный для данных)
             elif array.ndim == 2:
                 rows = min(max_rows, shape[0])
+                cols = min(max_cols, shape[1])
 
-                # Определяем, сколько столбцов показывать
-                if show_all_columns:
-                    cols = shape[1]
-                    logger.info(f"  • Отображение всех {cols} столбцов (может быть длинным)")
-                else:
-                    cols = min(max_cols, shape[1])
+                print(colored(f"  • Первые {rows} строк x {cols} столбцов:", "magenta"))
 
-                logger.info(f"  • Первые {rows} строк x {cols} столбцов:")
-
-                # Подготовка данных для tabulate
-                sample = array[:rows, :cols]
-
-                # Форматируем числа для лучшей читаемости
-                formatted_data = []
+                # Форматируем вывод для лучшей читаемости
                 for i in range(rows):
-                    row = []
-                    for x in sample[i]:
-                        if isinstance(x, (float, np.floating)):
-                            row.append(f"{x:.4f}")
-                        else:
-                            row.append(str(x))
-                    formatted_data.append(row)
+                    row = array[i, :cols]
+                    row_str = ", ".join([f"{x:.4f}" if isinstance(x, (float, np.floating)) else str(x) for x in row])
+                    if shape[1] > max_cols:
+                        row_str += f", ... (и еще {shape[1] - max_cols} колонок)"
+                    print(f"    Строка {i}: [{row_str}]")
 
-                # Добавляем заголовки
-                headers = [f"Col {i}" for i in range(cols)]
-
-                # Настройка ширины столбцов
-                max_col_width = 12  # Максимальная ширина каждого столбца
-                col_widths = [max_col_width] * cols
-
-                # Выводим таблицу с контролируемой шириной столбцов
-                table = tabulate.tabulate(formatted_data,
-                                          headers=headers,
-                                          tablefmt="grid",
-                                          stralign="right",
-                                          maxcolwidths=col_widths)  # Устанавливаем максимальную ширину для каждого столбца [[7]]
-                logger.info(f"\n{table}")
-
-                if not show_all_columns and rows < shape[0]:
-                    logger.info(f"    ... и еще {shape[0] - rows} строк")
-                if not show_all_columns and cols < shape[1]:
-                    logger.warning(
-                        f"    ⚠️  Отображено только {cols} из {shape[1]} столбцов. Используйте show_all_columns=True для просмотра всех столбцов.")
-                elif show_all_columns and shape[1] > 20:
-                    logger.info(
-                        f"    💡 Совет: Для очень широких таблиц используйте max_cols параметр для ограничения отображаемых столбцов")
+                if rows < shape[0]:
+                    print(colored(f"    ... и еще {shape[0] - rows} строк", "yellow"))
 
             # Случай 4: Многомерный массив (3D+)
             else:
-                logger.info(f"  • Многомерный массив ({array.ndim}D)")
-                logger.warning("  • Показываем срез по первому измерению:")
+                print(colored(f"  • Многомерный массив ({array.ndim}D)", "magenta"))
+                print(colored("  • Показываем срез по первому измерению:", "yellow"))
 
                 # Создаем срез первых элементов
                 slice_obj = tuple([slice(0, min(2, array.shape[0]))] +
                                   [slice(None) for _ in range(1, array.ndim)])
                 sample = array[slice_obj]
 
-                logger.info(f"  • Пример данных (упрощенный):")
-                logger.info(f"    Форма среза: {sample.shape}")
-                logger.info(f"    Содержимое: {str(sample).replace(chr(10), ' ')}")
+                print(colored(f"  • Пример данных (упрощенный):", "yellow"))
+                print(f"    Форма среза: {sample.shape}")
+                print(f"    Содержимое: {str(sample).replace(chr(10), ' ')}")
 
         data.close()
         return True
 
     except Exception as e:
-        logger.exception(f"❌ Ошибка при обработке файла {file_path}")
+        print(colored(f"❌ Ошибка при обработке файла {file_path}: {str(e)}", "red"))
         return False
 
 
 def main():
     """Основная функция для проверки всех файлов"""
-    logger.info("🔍 Начинаем проверку файлов данных...")
-    logger.info("========================================")
-
     files_to_check = [
         'train_data.npz',
         'val_data.npz',
@@ -140,45 +93,39 @@ def main():
         'backtest_data.npz'
     ]
 
+    print(colored("🔍 Начинаем проверку файлов данных...", "cyan", attrs=["bold"]))
+    print(colored("========================================", "cyan"))
+
     found_files = 0
     for file in files_to_check:
-        # Показываем все столбцы только для небольших таблиц, иначе используем ограничение
-        if inspect_npz_file(file, max_cols=15, show_all_columns=True):
+        if inspect_npz_file(file):
             found_files += 1
 
     # Итоговая статистика
-    logger.info("\n\n📊 Результаты проверки:")
-    if found_files > 0:
-        logger.success(f"  • Найдено файлов: {found_files}/{len(files_to_check)}")
-    if len(files_to_check) - found_files > 0:
-        logger.warning(f"  • Пропущено файлов: {len(files_to_check) - found_files}")
-    else:
-        logger.success(f"  • Пропущено файлов: {len(files_to_check) - found_files}")
+    print(colored("\n\n📊 Результаты проверки:", "cyan", attrs=["bold"]))
+    print(colored(f"  • Найдено файлов: {found_files}/{len(files_to_check)}", "green"))
+    print(colored(f"  • Пропущено файлов: {len(files_to_check) - found_files}",
+                  "yellow" if len(files_to_check) - found_files > 0 else "green"))
 
     if found_files > 0:
-        logger.info("\n💡 Советы по интерпретации данных:")
-        logger.info("  • 'X_*' обычно содержит признаки (фичи)")
-        logger.info("  • 'y_*' обычно содержит целевые переменные")
-        logger.info("  • Для временных рядов первое измерение - временные шаги")
-        logger.info("  • Используйте np.load(file)['key'].shape для проверки формы")
-        logger.info("  • Для просмотра всех столбцов используйте параметр show_all_columns=True")
-        logger.info("  • Для контроля ширины столбцов используется параметр maxcolwidths [[3]]")
+        print(colored("\n💡 Советы по интерпретации данных:", "blue"))
+        print(colored("  • 'X_*' обычно содержит признаки (фичи)", "cyan"))
+        print(colored("  • 'y_*' обычно содержит целевые переменные", "cyan"))
+        print(colored("  • Для временных рядов первое измерение - временные шаги", "cyan"))
+        print(colored("  • Используйте np.load(file)['key'].shape для проверки формы", "cyan"))
 
 
 if __name__ == "__main__":
-    # Проверяем наличие необходимых библиотек и устанавливаем при необходимости
     try:
-        import loguru
-        import tabulate
-    except ImportError:
-        logger.warning("Установка необходимых библиотек loguru и tabulate...")
-        os.system("pip install loguru tabulate --quiet")
-        from loguru import logger
-        import tabulate
+        # Проверяем наличие необходимых библиотек
+        try:
+            import termcolor
+        except ImportError:
+            print(colored("Установка termcolor для цветного вывода...", "yellow"))
+            os.system("pip install termcolor --quiet")
 
-    try:
         main()
     except KeyboardInterrupt:
-        logger.warning("\n\nПрограмма прервана пользователем (Ctrl+C)")
+        print(colored("\n\nПрограмма прервана пользователем (Ctrl+C)", "yellow"))
     except Exception as e:
-        logger.exception("Критическая ошибка в программе")
+        print(colored(f"Критическая ошибка: {str(e)}", "red"))
