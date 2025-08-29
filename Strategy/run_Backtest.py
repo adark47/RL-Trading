@@ -73,7 +73,6 @@ if __name__ == "__main__":
         instrument_id=_instrument.id,  # Используем instrument.id вместо всего объекта instrument
         primary_bar_type=_1min_bartype,
         trade_size=Decimal(settings.trade_size),  # taken from settings
-        warmup_bars=35  # Минимальное количество баров для расчета MACD(12,26,9)
     )
 
     # Create and register the strategy

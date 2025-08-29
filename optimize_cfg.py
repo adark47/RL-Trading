@@ -26,8 +26,10 @@ session_name = "optuna_cfg_optimization_results"
 opt_dir = os.path.join(base_cfg.paths.output_dir, session_name)
 os.makedirs(opt_dir, exist_ok=True)
 
+# Исправлено: заменен .dict() на .model_dump() для Pydantic V2
 with open(os.path.join(opt_dir, "orig_master_cfg.json"), "w") as f:
-    json.dump(base_cfg.dict(), f, indent=2, default=str)
+    # json.dump(base_cfg.dict(), f, indent=2, default=str) # Старая версия
+    json.dump(base_cfg.model_dump(), f, indent=2, default=str) # Новая версия
 
 setup_logging(session_name=session_name, cfg=base_cfg)
 
@@ -60,32 +62,47 @@ def objective(trial: optuna.Trial):
     cfg.paths.config_name = f"{base_cfg.paths.config_name}_trial{trial.number:05d}"
     cfg.paths.base_output_dir = opt_dir
 
-    cfg.paths.config_name = f"{base_cfg.paths.config_name}_trial{trial.number:05d}"
-    cfg.paths.base_output_dir = opt_dir
-
     # for faster runs: skip plotting and example caching
     cfg.data.plot_examples = 0
     cfg.backtest.plot_backtest_balance_curve = False
     # cfg.debug.debug_max_size_data = None
 
+    # Выполняем бэктест
     metrics = run_backtest(cfg)
+
+    # Сохраняем все метрики как атрибуты триала
     for k, v in metrics.items():
         trial.set_user_attr(k, v)
 
-    # TARGET METRICS
-    total_pnl = float(metrics["final_balance_change"].rstrip("%"))
-    accuracy = float(metrics["accuracy"].rstrip("%"))
-    num_trades = int(metrics["total_trades"])
+    # TARGET METRICS - с обработкой ошибок
+    try:
+        # Используем .get() с дефолтными значениями для предотвращения KeyError
+        total_pnl_str = metrics.get("final_balance_change", "0%")
+        accuracy_str = metrics.get("accuracy", "0%")
+        num_trades_str = metrics.get("total_trades", "0")
+
+        # Конвертируем значения, обрабатываем возможные ошибки конвертации
+        total_pnl = float(total_pnl_str.rstrip("%")) if isinstance(total_pnl_str, str) and total_pnl_str.endswith('%') else float(total_pnl_str)
+        accuracy = float(accuracy_str.rstrip("%")) if isinstance(accuracy_str, str) and accuracy_str.endswith('%') else float(accuracy_str)
+        num_trades = int(num_trades_str) if str(num_trades_str).isdigit() else int(float(num_trades_str)) # На случай, если строка "0.0"
+
+    except (KeyError, ValueError, TypeError) as e:
+        # Если метрики отсутствуют или некорректны, логируем и возвращаем нейтральные значения
+        logging.warning(f"Trial {trial.number} failed to extract metrics correctly: {e}. Metrics received: {metrics}. Assigning default values.")
+        total_pnl = 0.0
+        accuracy = 0.0
+        num_trades = 0
+
     # Optuna -> maximize pnl, minimize trades (multiply by -1 to minimize)
-    # return total_pnl, -num_trades
-    return total_pnl, accuracy, -num_trades
+    # Цель: максимизировать PnL, минимизировать сделки (-num_trades), максимизировать точность
+    return total_pnl, accuracy, -num_trades # Возвращаем кортеж значений для многокритериальной оптимизации
 
 
 sampler = optuna.samplers.TPESampler(multivariate=True, warn_independent_sampling=False)
 pruner = optuna.pruners.MedianPruner(n_warmup_steps=5, interval_steps=2)
 
 study = optuna.create_study(
-    directions=["maximize", "maximize", "maximize"],  # pnl ↑,  −trades ↑, accuracy ↑
+    directions=["maximize", "maximize", "maximize"],  # pnl ↑,  accuracy ↑, −trades ↑
     sampler=sampler,
     pruner=pruner,
     study_name=f"backtest_opt_{run_stamp}",
@@ -102,13 +119,18 @@ df = study.trials_dataframe(attrs=("number", "values", "params", "user_attrs", "
 df.to_parquet(os.path.join(opt_dir, "trials.parquet"), index=False)
 
 # best of Pareto front (rank 0) -> take the first one
-best = [t for t in study.best_trials if t.values is not None][0]
-best_cfg = dict(best.params)
-with open(os.path.join(opt_dir, "best_backtest_cfg.json"), "w") as f:
-    json.dump(best_cfg, f, indent=2)
+# Фильтруем только завершенные триалы с корректными значениями
+completed_trials = [t for t in study.best_trials if t.values is not None]
+if completed_trials:
+    best = completed_trials[0]
+    best_cfg = dict(best.params)
+    with open(os.path.join(opt_dir, "best_backtest_cfg.json"), "w") as f:
+        json.dump(best_cfg, f, indent=2)
 
-logging.info(f"[Optuna] best trial #{best.number}: PnL={best.values[0]:.2f}%, trades={-best.values[1]}")
-logging.info(f"[Optuna] params: {best_cfg}")
+    logging.info(f"[Optuna] best trial #{best.number}: PnL={best.values[0]:.2f}%, Accuracy={best.values[1]:.2f}%, Trades={-best.values[2]}")
+    logging.info(f"[Optuna] params: {best_cfg}")
+else:
+    logging.warning("[Optuna] No successful trials found to determine the best configuration.")
 
 try:
     import matplotlib
@@ -117,15 +139,23 @@ try:
     import matplotlib.pyplot as plt
     from optuna.visualization.matplotlib import plot_optimization_history, plot_pareto_front
 
-    ax1 = plot_optimization_history(study, target=lambda t: t.values[0], target_name="Total PnL (%)")
-    fig1 = getattr(ax1, "figure", ax1)
-    fig1.savefig(os.path.join(opt_dir, "optuna_history.png"), dpi=300)
-    plt.close(fig1)
+    # Проверяем, есть ли завершенные триалы перед построением графиков
+    if study.trials_dataframe(attrs=("number", "values")).dropna(subset=["values"]).shape[0] > 0:
+        ax1 = plot_optimization_history(study, target=lambda t: t.values[0] if t.values else None, target_name="Total PnL (%)")
+        fig1 = getattr(ax1, "figure", ax1)
+        fig1.savefig(os.path.join(opt_dir, "optuna_history.png"), dpi=300)
+        plt.close(fig1)
 
-    ax2 = plot_pareto_front(study, target_names=["PnL (%)", "-Trades"])
-    fig2 = getattr(ax2, "figure", ax2)
-    fig2.savefig(os.path.join(opt_dir, "pareto.png"), dpi=300)
-    plt.close(fig2)
+        # Для Pareto фронта используем только 2 цели, если нужно
+        # ax2 = plot_pareto_front(study, target_names=["PnL (%)", "Accuracy (%)", "-Trades"])
+        # Или выбрать две наиболее важные цели
+        # Например, PnL и -Trades
+        ax2 = plot_pareto_front(study, targets=lambda t: (t.values[0], t.values[2]) if t.values else None, target_names=["PnL (%)", "-Trades"])
+        fig2 = getattr(ax2, "figure", ax2)
+        fig2.savefig(os.path.join(opt_dir, "pareto.png"), dpi=300)
+        plt.close(fig2)
+    else:
+         logging.warning("No completed trials with values found, skipping plot generation.")
 
 except Exception as e:
     logging.warning(f"Failed to draw Optuna plots: {e}")

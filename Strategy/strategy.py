@@ -50,7 +50,6 @@ class StrategyConfig(StrategyConfig, frozen=True):
     instrument_id: InstrumentId  # Изменено с Instrument на InstrumentId
     primary_bar_type: BarType
     trade_size: Decimal
-    warmup_bars: int = 35  # Увеличено до 35 для правильного расчета MACD(12,26,9)
 
 
 class Strategy(Strategy):
@@ -91,48 +90,10 @@ class Strategy(Strategy):
         else:
             self.dfBars = pd.concat([self.dfBars, new_row])
 
-        # Ограничиваем размер DataFrame (сохраняем последние N баров)
-        if len(self.dfBars) > self.config.warmup_bars + 10:
-            self.dfBars = self.dfBars.tail(self.config.warmup_bars + 10)
-
-        # Проверяем, достаточно ли данных для расчета индикаторов
-        if len(self.dfBars) < self.config.warmup_bars:
-            self.log.info(f"Warming up... {len(self.dfBars)}/{self.config.warmup_bars} bars collected",
-                          color=LogColor.BLUE)
-            return
-
-        if not self.warmup_complete:
-            self.log.info(f"Warmup complete! {len(self.dfBars)} bars collected",
-                          color=LogColor.GREEN)
-            self.warmup_complete = True
 
         # Рассчитываем индикаторы
         try:
-            # Рассчитываем MACD (12,26,9)
-            macd, macd_signal, macd_hist = talib.MACD(self.dfBars['close'],
-                                                      fastperiod=12,
-                                                      slowperiod=26,
-                                                      signalperiod=9)
-            self.dfBars['macd'] = macd
-            self.dfBars['macd_signal'] = macd_signal
-            self.dfBars['macd_hist'] = macd_hist
-
-            # Рассчитываем RSI (14)
-            self.dfBars['rsi'] = talib.RSI(self.dfBars['close'], timeperiod=14)
-
-            # Рассчитываем Bollinger Bands (20, 2)
-            upper, middle, lower = talib.BBANDS(self.dfBars['close'], timeperiod=20)
-            self.dfBars['bb_upper'] = upper
-            self.dfBars['bb_mid'] = middle
-            self.dfBars['bb_lower'] = lower
-
-            # Рассчитываем ATR (14)
-            self.dfBars['atr'] = talib.ATR(self.dfBars['high'],
-                                           self.dfBars['low'],
-                                           self.dfBars['close'],
-                                           14)
-
-            # Проверяем наличие NaN в последних значениях индикаторов
+            # Проверяем наличие NaN в последних значениях
             latest = self.dfBars.iloc[-1]
             if latest.isna().any():
                 self.log.info("Waiting for complete indicator values...", color=LogColor.BLUE)
@@ -156,23 +117,12 @@ class Strategy(Strategy):
     def check_signals(self, bar: Bar):
         """Проверяет сигналы и размещает ордера при необходимости"""
         # Получаем последние значения индикаторов
-        latest = self.dfBars.iloc[-1]
-        previous = self.dfBars.iloc[-2]
+        latest = self.dfBars.iloc[:-1]
+        previous = self.dfBars.iloc[:-2]
 
         # Проверяем позицию
         position = self.parity_position()
 
-        # Сигнал на покупку: MACD пересекает сигнальную линию снизу вверх
-        if latest['macd'] > latest['macd_signal'] and previous['macd'] <= previous['macd_signal']:
-            self.log.info(" bullish MACD crossover detected!", color=LogColor.GREEN)
-            if position <= 0:  # Нет длинной позиции
-                self.execute_buy(bar)
-
-        # Сигнал на продажу: MACD пересекает сигнальную линию сверху вниз
-        elif latest['macd'] < latest['macd_signal'] and previous['macd'] >= previous['macd_signal']:
-            self.log.info(" bearish MACD crossover detected!", color=LogColor.RED)
-            if position >= 0:  # Нет короткой позиции
-                self.execute_sell(bar)
 
     def execute_buy(self, bar: Bar):
         """Размещает рыночный ордер на покупку"""

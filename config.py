@@ -70,8 +70,8 @@ class DataConfig(BaseModel):
 #    volume_channels: List[str] = ["volume", "num_trades"]
 
 #    other_channels: List[str] = ['macd', 'macd_signal', 'macd_hist', 'rsi', 'bb_upper', 'bb_mid', 'bb_lower', 'hma_fast', 'hma_slow', 'atr']
-
     other_channels: List[str] = []
+
     plot_examples: int = 1
     plot_channel_idx: int = 4
 
@@ -259,21 +259,6 @@ class MasterConfig(BaseModel):
 #   test_files: str = 'test_data.npz',
 #   backtest_files: str = 'backtest_data.npz'
 
-#   macd_fastperiod: int = 12
-#   macd_slowperiod: int = 26
-#   macd_signalperiod: int = 9
-
-#   rsi_timeperiod: int = 14
-
-#   bb_timeperiod: int = 20
-
-#   hma_fast_timeperiod: int = 9
-#   hma_slow_timeperiod: int = 21
-
-#   atr_timeperiod: int = 14
-
-
-
 #: float = 0.01
 #: int = 17
 #: bool = False
@@ -283,6 +268,23 @@ class MasterConfig(BaseModel):
     # MLFLOW_TRACKING_URI: str = 'http://192.168.88.6:5500'
     # name_backtesting_experiment: str = 'Backtesting'
     # name_train_experiment: str = 'Train'
+
+#class StrategyConfig(BaseModel):
+
+# api_key = "jxur4R4PVH8FL7vx92"
+# api_secret = "1KnNppfPZM1fjz46iZbS7WYw2uorjlM7CMru"
+
+# trader_id_live = 'LIVE-001'
+# trader_id_backtest = 'BACKTEST-001'
+
+# product_type = 'SPOT'               # SPOT/LINEAR
+# symbol = 'DOGEUSDT'
+
+# timeout_connection = 30.0
+# timeout_reconciliation = 20.0
+# timeout_portfolio = 20.0
+# timeout_disconnection = 20.0
+# timeout_post_stop = 5.0
 
 
 
