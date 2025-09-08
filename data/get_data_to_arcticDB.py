@@ -1,5 +1,7 @@
 # data/get_data_to_arcticDB.py
 
+import sys
+import os
 import requests
 import pandas as pd
 import datetime
@@ -8,6 +10,13 @@ import sys
 from loguru import logger
 from tabulate import tabulate
 import arcticdb as adb
+
+# Добавляем родительскую директорию в путь поиска модулей
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# Импортируем конфигурацию
+from config import DataPreprocessingConfig as DataPreprocessingConfig
+# Создаем экземпляр конфигурации
+settings = DataPreprocessingConfig()
 
 # Настройка логгера с цветами и эмоджи
 log_dir = "logs"
@@ -313,10 +322,10 @@ def save_to_arcticdb(library, symbol_name, new_data, existing_data=None):
 
 if __name__ == "__main__":
     # Параметры запроса
-    MARKET_TYPE = 'linear'  # 'spot', 'linear' (USDT фьючерсы) или 'inverse' (BTC фьючерсы)
-    SYMBOL = 'DOGEUSDT'  # Для спота или 'BTCUSDT.P' для перпетуал фьючерсов
-    TIMEFRAME = '1m'  # Таймфрейм (по умолчанию 1 минута)
-    DAYS = 100.0  # Период в днях (можно дробное значение)
+    MARKET_TYPE = settings.MARKET_TYPE  # 'spot', 'linear' (USDT фьючерсы) или 'inverse' (BTC фьючерсы)
+    SYMBOL = settings.TICKER  # Для спота или 'BTCUSDT.P' для перпетуал фьючерсов
+    TIMEFRAME = settings.TIMEFRAME  # Таймфрейм (по умолчанию 1 минута)
+    DAYS = settings.DAYS_GET  # Период в днях (можно дробное значение)
 
     logger.info(f"🚀 Начинаем загрузку исторических данных с Bybit")
     logger.info(f"Параметры: {MARKET_TYPE} рынок, {SYMBOL}, {TIMEFRAME}, {DAYS} дней")
@@ -325,12 +334,12 @@ if __name__ == "__main__":
 
     try:
         # === ИНИЦИАЛИЗАЦИЯ ARCTICDB ===
-        storage_path = "arcticdb_storage"
+        storage_path = settings.ARCTIC_PATH
         logger.info(f"🔧 Инициализация ArcticDB хранилища: {storage_path}")
         ac = adb.Arctic(f"lmdb://{storage_path}")
 
         # Создаем или получаем библиотеку для хранения данных
-        library_name = "bybit_market_data"
+        library_name = settings.LIBRARY_NAME
         if not ac.has_library(library_name):
             ac.create_library(library_name)
             logger.info(f"🆕 Создана новая библиотека ArcticDB: {library_name}")

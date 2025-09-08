@@ -1,7 +1,7 @@
 # run_Live.py
 
-import settings
-
+import os
+import sys
 from nautilus_trader.adapters.bybit.common.enums import BybitProductType
 from nautilus_trader.adapters.bybit.config import (
     BybitDataClientConfig,
@@ -25,7 +25,15 @@ from nautilus_trader.model.identifiers import InstrumentId
 # Исправленный импорт Decimal - используем стандартный модуль decimal
 from decimal import Decimal
 
-from strategy import Strategy, StrategyConfig
+from strategy import RLStrategy, RLStrategyConfig
+
+# Добавляем родительскую директорию в путь поиска модулей
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# Импортируем конфигурацию
+from config import StrategyConfig as StrategyConfig_
+# Создаем экземпляр конфигурации
+settings = StrategyConfig_()
+
 
 
 def _validate_credentials() -> None:
@@ -47,8 +55,8 @@ def build_node() -> TradingNode:
     # Создаем InstrumentId напрямую
     instrument_id = InstrumentId.from_str(f"{symbol}.BYBIT")
 
-    strat_config = StrategyConfig(
-        instrument_id=instrument_id,  # Передаем instrument_id вместо instrument
+    strat_config = RLStrategyConfig(
+        instrument_id=instrument_id,                    # Передаем instrument_id вместо instrument
         primary_bar_type=BarType.from_str(f"{symbol}.BYBIT-1-MINUTE-LAST-EXTERNAL"),
         trade_size=Decimal(settings.trade_size),  # taken from settings
     )
@@ -95,7 +103,7 @@ def build_node() -> TradingNode:
 
     # Build and return the node ---------------------------------------------
     node = TradingNode(config=node_config)
-    node.trader.add_strategy(Strategy(config=strat_config))
+    node.trader.add_strategy(RLStrategy(config=strat_config))
     node.add_data_client_factory("BYBIT", BybitLiveDataClientFactory)
     node.add_exec_client_factory("BYBIT", BybitLiveExecClientFactory)
     node.build()

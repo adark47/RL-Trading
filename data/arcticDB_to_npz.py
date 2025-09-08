@@ -1,16 +1,28 @@
 # data/csv_to_npz.py
 
+import sys
+import os
+# Добавляем родительскую директорию в путь поиска модулей
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# Импортируем конфигурацию
+from config import DataPreprocessingConfig as DataPreprocessingConfig
+# Создаем экземпляр конфигурации
+settings = DataPreprocessingConfig()
+
 from loguru import logger
 import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
 from typing import Dict, List, Tuple, Optional
+from tabulate import tabulate
 import sys
 import time
 import talib
 import math
 from pathlib import Path
 import arcticdb as adb  # Импортируем ArcticDB
+
+from ta_strategy import apply_strategy
 
 # Настройка логгера Loguru с эмодзи и улучшенным цветовым оформлением
 log_dir = "logs"
@@ -33,11 +45,12 @@ logger.add(
 class FinancialDataPreprocessor:
     """Класс для преобразования данных из ArcticDB в формат .npz для ML-моделей"""
 
-    def __init__(self, ticker: str = "DOGEUSDT", window_size: int = 150,
-                 timeframe: str = "1m", market_type: str = "linear",
-                 arctic_path: str = "arcticdb_storage",
-                 library_name: str = "bybit_market_data",
-                 days_back: float = 30.0):
+    def __init__(self, ticker: str = settings.TICKER, window_size: int = 150,
+                 timeframe: str = settings.TIMEFRAME,
+                 market_type: str = settings.MARKET_TYPE,
+                 arctic_path: str = settings.ARCTIC_PATH,
+                 library_name: str = settings.LIBRARY_NAME,
+                 days_back: float = settings.DAYS_BACK):
         self.ticker = ticker
         self.window_size = window_size
         self.timeframe = timeframe
@@ -48,6 +61,7 @@ class FinancialDataPreprocessor:
         self.symbol_name = f"{ticker}_{timeframe}_{market_type}"
 
         # Базовые колонки, которые будут расширены техническими индикаторами
+        # Это начальное значение, будет обновлено после apply_strategy
         self.feature_columns = ["open", "high", "low", "close", "volume"]
         self.logger = logger.bind(component="FinancialPreprocessor")
 
@@ -76,7 +90,7 @@ class FinancialDataPreprocessor:
         """Проверка целостности данных с расширенной информацией об ошибках"""
         self.logger.debug("🔍 Начало валидации данных")
 
-        # Проверка наличия обязательных колонок
+        # Проверка наличия обязательных колонок (включая обновленные feature_columns)
         required_columns = ["date"] + self.feature_columns
         missing = [col for col in required_columns if col not in df.columns]
         if missing:
@@ -136,6 +150,7 @@ class FinancialDataPreprocessor:
                 self.logger.debug(
                     f"⏳ Прогресс создания окон: {progress:.1f}% ({i + 1}/{total_rows - self.window_size + 1})")
 
+            # Используем обновленный self.feature_columns
             window_data = df.iloc[i:i + self.window_size][self.feature_columns].values
             last_date = df.iloc[i + self.window_size - 1]["date"]
 
@@ -223,6 +238,8 @@ class FinancialDataPreprocessor:
         try:
             # Загрузка данных из ArcticDB
             df = self.load_data_from_arcticdb()
+            self.logger.info(f"Превью данных (до apply_strategy): \n{tabulate(df.tail(5), headers='keys', tablefmt='psql', floatfmt='.4f', showindex=False)}")
+
 
             if df.empty:
                 self.logger.error("❌ Нет данных для обработки после загрузки из ArcticDB")
@@ -238,10 +255,28 @@ class FinancialDataPreprocessor:
             time_diff = df["date"].diff().min()
             self.logger.debug(f"⏱️ Минимальный интервал данных: {time_diff}")
 
-#            # Добавление технических индикаторов (ПОСЛЕ сортировки!)
-#            df = self.add_technical_indicators(df)
+            # Добавление технических индикаторов (ПОСЛЕ сортировки!)
+            logger.info("⚙️ Применение стратегии с оптимизированными параметрами и учетом комиссий...")
+            df_before_strategy = df.copy() # Сохраняем копию для сравнения
+            df = apply_strategy(df) # Предполагаем, что apply_strategy модифицирует df, добавляя новые колонки
 
-            # Валидация данных
+            # Определяем, какие колонки были добавлены apply_strategy (кроме базовых и даты)
+            base_and_date_cols = set(["open", "high", "low", "close", "volume", "date"])
+            all_cols = set(df.columns)
+            added_feature_cols = sorted(list(all_cols - base_and_date_cols)) # Сортируем для консистентности
+
+            # Обновляем self.feature_columns: базовые + новые индикаторы
+            # Можно также сохранить порядок: сначала базовые, потом индикаторы
+            self.feature_columns = ["open", "high", "low", "close", "volume"] + added_feature_cols
+            self.logger.info(f"📊 Обновленные feature_columns: {self.feature_columns}")
+
+            logger.info(f"Загружено {len(df)} записей с {df['date'].min()} по {df['date'].max()}")
+            logger.info(f"📊 Размер данных: {df.shape} (строк: {df.shape[0]}, колонок: {df.shape[1]})")
+            logger.info(f"📋 Список колонок в данных: {list(df.columns)}")
+            logger.info(f"Превью данных (после apply_strategy): \n{tabulate(df.tail(5), headers='keys', tablefmt='psql', floatfmt='.4f', showindex=False)}")
+
+
+            # Валидация данных (теперь с обновленным self.feature_columns)
             self.validate_data(df)
 
             # Разделение данных
@@ -273,8 +308,9 @@ class FinancialDataPreprocessor:
 
                 self.logger.info(f"🔧 Обработка набора '{dataset}'")
                 segment = df.iloc[start_idx:end_idx].copy()
+                self.logger.info(f"Превью данных (сегмент {dataset}): \n{tabulate(segment.tail(5), headers='keys', tablefmt='psql', floatfmt='.4f', showindex=False)}")
 
-                # Создание окон
+                # Создание окон (теперь с обновленным self.feature_columns)
                 windows, keys_map = self.create_windows(segment, dataset)
 
                 # Сохранение
@@ -297,19 +333,19 @@ if __name__ == "__main__":
 
     try:
         # Параметры подключения к ArcticDB
-        ARCTIC_PATH = "arcticdb_storage"
-        LIBRARY_NAME = "bybit_market_data"
-        TICKER = "DOGEUSDT"
-        TIMEFRAME = "1m"
-        MARKET_TYPE = "linear"
-        DAYS_BACK = 100.0  # Глубина запроса в днях
+        ARCTIC_PATH = settings.ARCTIC_PATH
+        LIBRARY_NAME = settings.LIBRARY_NAME
+        TICKER = settings.TICKER
+        TIMEFRAME = settings.TIMEFRAME
+        MARKET_TYPE = settings.MARKET_TYPE
+        DAYS_BACK = settings.DAYS_BACK  # Глубина запроса в днях
 
         # Исправленные проценты
         percentages = {
-            "train": 0.75,
-            "val": 0.05,
-            "test": 0.10,
-            "backtest": 0.10
+            "train": settings.percent_train,
+            "val": settings.percent_val,
+            "test": settings.percent_test,
+            "backtest": settings.percent_backtest
         }
 
         # Проверка суммы процентов
@@ -329,10 +365,10 @@ if __name__ == "__main__":
 
         preprocessor.process_dataset(
             output_files={
-                "train": "train_data.npz",
-                "val": "val_data.npz",
-                "test": "test_data.npz",
-                "backtest": "backtest_data.npz"
+                "train": settings.train_files,
+                "val": settings.val_files,
+                "test": settings.test_files,
+                "backtest": settings.backtest_files
             },
             percentages=percentages
         )

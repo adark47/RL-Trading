@@ -57,20 +57,28 @@ class PathConfig(BaseModel):
 
 
 class DataConfig(BaseModel):
-    expected_channels: List[str] = ["open", "high", "low", "close", "volume"]
-#    expected_channels: List[str] = ['open', 'high', 'low', 'close', 'volume', 'macd', 'macd_signal', 'macd_hist', 'rsi', 'bb_upper', 'bb_mid', 'bb_lower', 'hma_fast', 'hma_slow', 'atr']
-#    expected_channels: List[str] = ["open", "high", "volume_weighted_average", "low", "close", "volume", "num_trades"]
+    expected_channels: List[str] = ['open', 'high', 'low', 'close', 'volume',
+                                    'atr', 'vol_ma', 'volume_confirmation', 'hma', 'upper_band', 'lower_band',
+                                    'entries_1m', 'exits_1m',
+                                    'entries_5m', 'exits_5m',
+                                    'entries_15m', 'exits_15m',
+                                    'entries', 'exits', 'norm_atr',
+                                    'price_position', 'take_profit_level', 'trailing_stop_distance', 'commission'
+                                   ]
 
     data_channels: List[str] = expected_channels.copy()
 
     price_channels: List[str] = ['open', 'high', 'low', 'close']
-#    price_channels: List[str] = ["open", "high", "volume_weighted_average", "low", "close"]
 
-    volume_channels: List[str] = ["volume"]
-#    volume_channels: List[str] = ["volume", "num_trades"]
+    volume_channels: List[str] = ['volume', 'atr', 'vol_ma', 'volume_confirmation', 'norm_atr']
 
-#    other_channels: List[str] = ['macd', 'macd_signal', 'macd_hist', 'rsi', 'bb_upper', 'bb_mid', 'bb_lower', 'hma_fast', 'hma_slow', 'atr']
-    other_channels: List[str] = []
+    other_channels: List[str] = ['hma', 'upper_band', 'lower_band',
+                                 'entries_1m', 'exits_1m',
+                                 'entries_5m', 'exits_5m',
+                                 'entries_15m', 'exits_15m',
+                                 'entries', 'exits',
+                                 'price_position', 'take_profit_level', 'trailing_stop_distance', 'commission'
+                                 ]
 
     plot_examples: int = 1
     plot_channel_idx: int = 4
@@ -239,57 +247,62 @@ class MasterConfig(BaseModel):
     logging: LoggingConfig = LoggingConfig()
 
 
-#class DataPreprocessingConfig(BaseModel):
-#   ARCTIC_PATH: str = 'arcticdb_storage'
-#   LIBRARY_NAME: str = 'bybit_market_data'
-#   TICKER: str = 'DOGEUSDT'
-#   TIMEFRAME: str = '1m'
-#   MARKET_TYPE: 'linear'     # 'spot', 'linear' (USDT фьючерсы) или 'inverse' (BTC фьючерсы)
-#   DAYS_BACK: float = 2.0            # Глубина запроса в днях для корвертации
-#   DAYS_GET: float = 7.0             # Период в днях (можно дробное значение)
-#   CSV_FILE: str = 'data.csv'
+class Version(BaseModel):
+    version: float = 0.1
+class DataPreprocessingConfig(BaseModel):
+    ARCTIC_PATH: str = 'arcticdb_storage'
+    LIBRARY_NAME: str = 'bybit_market_data_DOGEUSDT'
+    TICKER: str = 'DOGEUSDT'
+    TIMEFRAME: str = '1m'
+    MARKET_TYPE: str = 'linear'             # 'spot', 'linear' (USDT фьючерсы) или 'inverse' (BTC фьючерсы)
+    DAYS_BACK: float = 365.0                # Глубина запроса в днях для корвертации
+    DAYS_GET: float = 365.0                 # Период в днях (можно дробное значение)
+    CSV_FILE: str = 'data.csv'
 
-#   percent_train: float = 0.75,
-#   percent_val: float = 0.05,
-#   percent_test: float = 0.10,
-#   percent_backtest: float = 0.10
 
-#   train_files: str = 'train_data.npz',
-#   val_files: str = 'val_data.npz',
-#   test_files: str = 'test_data.npz',
-#   backtest_files: str = 'backtest_data.npz'
+    percent_train: float = 0.75
+    percent_val: float = 0.05
+    percent_test: float = 0.10
+    percent_backtest: float = 0.10
+
+    train_files: str = 'train_data.npz'
+    val_files: str = 'val_data.npz'
+    test_files: str = 'test_data.npz'
+    backtest_files: str = 'backtest_data.npz'
+
+    n_trials: int = 5000
+    n_jobs: int = -1        # Используйте n_jobs=-1 для автоматического определения количества ядер
+
+
+class MLflowConfig(BaseModel):
+    tracking_uri: str = 'http://192.168.88.6:5500'
+    name_backtesting_experiment: str = 'Backtesting-DOGEUSDT'
+    name_train_experiment: str = 'Train-DOGEUSDT'
+
+
+class StrategyConfig(BaseModel):
+    api_key: str = "jxur4R4PVH8FL7vx92"
+    api_secret: str = "1KnNppfPZM1fjz46iZbS7WYw2uorjlM7CMru"
+
+    trader_id_live: str = 'LIVE-001-DOGEUSDT'
+    trader_id_backtest: str = 'BACKTEST-001-DOGEUSDT'
+
+    product_type: str = 'LINEAR'               # SPOT/LINEAR
+    symbol: str = 'DOGEUSDT'
+
+    trade_size: int = 5
+
+    timeout_connection: float = 30.0
+    timeout_reconciliation: float = 20.0
+    timeout_portfolio: float = 20.0
+    timeout_disconnection: float = 20.0
+    timeout_post_stop: float = 5.0
+
 
 #: float = 0.01
 #: int = 17
 #: bool = False
 #: str = "pnl"
-
-#class MLflowConfig(BaseModel):
-    # MLFLOW_TRACKING_URI: str = 'http://192.168.88.6:5500'
-    # name_backtesting_experiment: str = 'Backtesting'
-    # name_train_experiment: str = 'Train'
-
-#class StrategyConfig(BaseModel):
-
-# api_key = "jxur4R4PVH8FL7vx92"
-# api_secret = "1KnNppfPZM1fjz46iZbS7WYw2uorjlM7CMru"
-
-# trader_id_live = 'LIVE-001'
-# trader_id_backtest = 'BACKTEST-001'
-
-# product_type = 'SPOT'               # SPOT/LINEAR
-# symbol = 'DOGEUSDT'
-
-# timeout_connection = 30.0
-# timeout_reconciliation = 20.0
-# timeout_portfolio = 20.0
-# timeout_disconnection = 20.0
-# timeout_post_stop = 5.0
-
-
-
-#from config import cfg as default_cfg
-#cfg.project_name
 
 cfg = MasterConfig()
 

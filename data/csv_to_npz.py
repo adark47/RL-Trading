@@ -1,11 +1,24 @@
+
+import sys
+import os
+# Добавляем родительскую директорию в путь поиска модулей
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# Импортируем конфигурацию
+from config import DataPreprocessingConfig as DataPreprocessingConfig
+# Создаем экземпляр конфигурации
+settings = DataPreprocessingConfig()
+
 from loguru import logger
 import pandas as pd
 import numpy as np
 from datetime import datetime
+from tabulate import tabulate
 from typing import Dict, List, Tuple
 import sys
 import time
 from pathlib import Path
+
+from ta_strategy import apply_strategy
 
 # Настройка логгера Loguru
 log_dir = "logs"
@@ -30,7 +43,11 @@ class FinancialDataPreprocessor:
     def __init__(self, ticker: str = "STOCK", window_size: int = 150):
         self.ticker = ticker
         self.window_size = window_size
-        self.feature_columns = ["open", "high", "low", "close", "volume"]
+
+        # Базовые колонки, которые будут расширены техническими индикаторами
+        # Это начальное значение, будет обновлено после apply_strategy
+        self.feature_columns = ['open', 'high', 'low', 'close', 'volume']
+
         self.logger = logger.bind(component="FinancialPreprocessor")
 
     @logger.catch
@@ -38,7 +55,7 @@ class FinancialDataPreprocessor:
         """Проверка целостности данных"""
         self.logger.debug("Начало валидации данных")
 
-        # Проверка наличия обязательных колонок
+        # Проверка наличия обязательных колонок (включая обновленные feature_columns)
         required_columns = ["date"] + self.feature_columns
         missing = [col for col in required_columns if col not in df.columns]
         if missing:
@@ -60,6 +77,8 @@ class FinancialDataPreprocessor:
             for col, count in null_counts.items():
                 if count > 0:
                     self.logger.debug(f"Пропуски в '{col}': {count}")
+        self.logger.info(
+            f"Превью данных: \n{tabulate(df.tail(10), headers='keys', tablefmt='psql', floatfmt='.4f', showindex=False)}")
 
         self.logger.success("Валидация данных завершена успешно")
 
@@ -88,6 +107,7 @@ class FinancialDataPreprocessor:
                 self.logger.debug(
                     f"Прогресс создания окон: {progress:.1f}% ({i + 1}/{total_rows - self.window_size + 1})")
 
+            # Используем обновленный self.feature_columns
             window_data = df.iloc[i:i + self.window_size][self.feature_columns].values
             last_date = df.iloc[i + self.window_size - 1]["date"]
 
@@ -133,7 +153,24 @@ class FinancialDataPreprocessor:
             self.logger.info("Загрузка данных из CSV")
             df = pd.read_csv(csv_path)
 
-            # Валидация данных
+            logger.info("⚙️ Применение стратегии с оптимизированными параметрами и учетом комиссий...")
+            df_before_strategy = df.copy()  # Сохраняем копию для сравнения
+            df = apply_strategy(df)  # Предполагаем, что apply_strategy модифицирует df, добавляя новые колонки
+
+            # Определяем, какие колонки были добавлены apply_strategy (кроме базовых и даты)
+            base_and_date_cols = set(["open", "high", "low", "close", "volume", "date"])
+            all_cols = set(df.columns)
+            added_feature_cols = sorted(list(all_cols - base_and_date_cols))  # Сортируем для консистентности
+
+            # Обновляем self.feature_columns: базовые + новые индикаторы
+            self.feature_columns = ["open", "high", "low", "close", "volume"] + added_feature_cols
+            self.logger.info(f"📊 Обновленные feature_columns: {self.feature_columns}")
+
+            logger.info(f"Загружено {len(df)} записей с {df['date'].min()} по {df['date'].max()}")
+            logger.info(f"📊 Размер данных: {df.shape} (строк: {df.shape[0]}, колонок: {df.shape[1]})")
+            logger.info(f"📋 Список колонок в данных: {list(df.columns)}")
+
+            # Валидация данных (теперь с обновленным self.feature_columns)
             self.validate_data(df)
 
             # Преобразование и сортировка
@@ -175,8 +212,10 @@ class FinancialDataPreprocessor:
 
                 self.logger.info(f"Обработка набора '{dataset}'")
                 segment = df.iloc[start_idx:end_idx].copy()
+                self.logger.info(
+                    f"Превью данных: \n{tabulate(segment.tail(), headers='keys', tablefmt='psql', floatfmt='.4f', showindex=False)}")
 
-                # Создание окон
+                # Создание окон (теперь с обновленным self.feature_columns)
                 windows, keys_map = self.create_windows(segment, dataset)
 
                 # Сохранение
@@ -199,24 +238,33 @@ if __name__ == "__main__":
 
     try:
         preprocessor = FinancialDataPreprocessor(
-            ticker="DOGEUSDT",
+            ticker=settings.TICKER,
             window_size=150
         )
 
+        # Исправленные проценты (сумма должна быть 1.0)
+        # Предположим, что было опечатка в val: 0.5 вместо 0.05
+        corrected_percentages = {
+            "train": settings.percent_train,        # 75% для обучения
+            "val": settings.percent_val,            # 5% для валидации (исправлено)
+            "test": settings.percent_test,          # 10% для тестирования
+            "backtest": settings.percent_backtest   # 10% для бэктеста
+        }
+
+        # Проверка суммы процентов
+        total_percent = sum(corrected_percentages.values())
+        if abs(total_percent - 1.0) > 0.01:
+            logger.warning(f"⚠️ Сумма процентов ({total_percent:.2f}) не равна 1.0")
+
         preprocessor.process_dataset(
-            csv_path="data.csv",
+            csv_path=settings.CSV_FILE,
             output_files={
-                "train": "train_data.npz",
-                "val": "val_data.npz",
-                "test": "test_data.npz",
-                "backtest": "backtest_data.npz"
+                "train": settings.train_files,
+                "val": settings.val_files,
+                "test": settings.test_files,
+                "backtest": settings.backtest_files
             },
-            percentages={
-                "train": 0.75,  # 75% для обучения
-                "val": 0.5,  # 5% для валидации
-                "test": 0.10,  # 10% для тестирования
-                "backtest": 0.10  # 10% для бэктеста
-            }
+            percentages=corrected_percentages
         )
 
         logger.success("Все файлы успешно созданы!")

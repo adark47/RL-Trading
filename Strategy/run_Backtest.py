@@ -1,11 +1,18 @@
 # run_Backtest.py
 
-import settings
+import sys
+import os
+# Добавляем родительскую директорию в путь поиска модулей
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# Импортируем конфигурацию
+from config import StrategyConfig as StrategyConfig
+# Создаем экземпляр конфигурации
+settings = StrategyConfig()
 
 from decimal import Decimal
 
-from strategy import Strategy
-from strategy import StrategyConfig
+from strategy import RLStrategy
+from strategy import RLStrategyConfig
 
 from data_provider import prepare_data_1min
 from nautilus_trader.indicators.average.moving_average import MovingAverageType
@@ -69,14 +76,14 @@ if __name__ == "__main__":
     # ----------------------------------------------------------------------------------
 
     # Create strategy configuration with proper warmup_bars
-    strategy_config = StrategyConfig(
-        instrument_id=_instrument.id,  # Используем instrument.id вместо всего объекта instrument
+    strategy_config = RLStrategyConfig(
+        instrument_id=_instrument.id,               # Используем instrument.id вместо всего объекта instrument
         primary_bar_type=_1min_bartype,
-        trade_size=Decimal(settings.trade_size),  # taken from settings
+        trade_size=Decimal(settings.trade_size),    # taken from settings
     )
 
     # Create and register the strategy
-    strategy = Strategy(config=strategy_config)
+    strategy = RLStrategy(config=strategy_config)
     engine.add_strategy(strategy)
 
     # Execute the backtest

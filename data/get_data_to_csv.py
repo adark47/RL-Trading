@@ -1,5 +1,14 @@
 # data/get_data.py
 
+import sys
+import os
+# Добавляем родительскую директорию в путь поиска модулей
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# Импортируем конфигурацию
+from config import DataPreprocessingConfig as DataPreprocessingConfig
+# Создаем экземпляр конфигурации
+settings = DataPreprocessingConfig()
+
 import requests
 import pandas as pd
 import datetime
@@ -273,10 +282,10 @@ def fetch_klines(category: str, symbol: str, timeframe: str = '1m', days: float 
 
 if __name__ == "__main__":
     # Параметры запроса
-    MARKET_TYPE = 'linear'  # 'spot', 'linear' (USDT фьючерсы) или 'inverse' (BTC фьючерсы)
-    SYMBOL = 'DOGEUSDT'  # Для спота или 'BTCUSDT.P' для фьючерсов
-    TIMEFRAME = '1m'  # Таймфрейм (по умолчанию 1 минута)
-    DAYS = 100.0  # Период в днях (можно дробное значение)
+    MARKET_TYPE = settings.MARKET_TYPE  # 'spot', 'linear' (USDT фьючерсы) или 'inverse' (BTC фьючерсы)
+    SYMBOL = settings.TICKER  # Для спота или 'BTCUSDT.P' для фьючерсов
+    TIMEFRAME = settings.TIMEFRAME  # Таймфрейм (по умолчанию 1 минута)
+    DAYS = settings.DAYS_GET  # Период в днях (можно дробное значение)
 
     logger.info(f"🚀 Начинаем загрузку исторических данных с Bybit")
     logger.info(f"Параметры: {MARKET_TYPE} рынок, {SYMBOL}, {TIMEFRAME}, {DAYS} дней")
@@ -289,7 +298,7 @@ if __name__ == "__main__":
 
         # Сохраняем и отображаем результат
         if not df.empty:
-            df.to_csv('data.csv', index=False)
+            df.to_csv(settings.CSV_FILE, index=False)
             logger.info("💾 Данные успешно сохранены в data.csv")
 
             # Выводим превью данных

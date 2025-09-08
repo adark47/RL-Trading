@@ -24,6 +24,8 @@ from utils import (
     set_random_seed,
 )
 
+from config import MLflowConfig as MLflowConfig
+MLcfg = MLflowConfig()
 
 def flatten_config(config, parent_key='', sep='.'):
     """Рекурсивно преобразует вложенный конфиг в плоский словарь с точечной нотацией."""
@@ -231,11 +233,11 @@ def get_pass_advantage(action: int, confidence: float, cfg: MasterConfig) -> boo
     pass_adv = long_pass or short_pass or close_pass
     return pass_adv
 
-
+@mlflow.trace
 def run_backtest(cfg: MasterConfig) -> Dict[str, Any]:
     # Настройка подключения к MLflow серверу
-    mlflow.set_tracking_uri("http://192.168.88.6:5500")
-    mlflow.set_experiment("Backtesting")
+    mlflow.set_tracking_uri(MLcfg.tracking_uri)
+    mlflow.set_experiment(MLcfg.name_backtesting_experiment)
 
     # Начало нового MLflow run
     with mlflow.start_run() as run:

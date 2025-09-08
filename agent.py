@@ -222,7 +222,8 @@ class D3QN_PER_Agent:
         logger.info(f"Model saved to {path}")
 
     def load_model(self, path: str) -> None:
-        state_dict = torch.load(path, map_location=self.device)
+#        state_dict = torch.load(path, map_location=self.device)
+        state_dict = torch.load(path, map_location=self.device, weights_only=False)  # <- Change here
         self.policy_net.load_state_dict(state_dict)
         self.target_net.load_state_dict(state_dict)
         self.policy_net.eval()

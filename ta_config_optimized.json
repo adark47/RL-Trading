@@ -1,0 +1,19 @@
+{
+  "atr": {
+    "timeperiod": 21
+  },
+  "hma": {
+    "timeperiod": 15
+  },
+  "volume_sma": {
+    "timeperiod": 33
+  },
+  "bands": {
+    "multiplier": 1.111837280386047
+  },
+  "risk_management": {
+    "take_profit_percent": 6.410754781184676,
+    "trailing_stop_percent": 3.361338165332801,
+    "commission_percent": 0.0004
+  }
+}

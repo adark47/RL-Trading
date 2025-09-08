@@ -22,9 +22,9 @@ from utils import (
     set_random_seed,
     setup_logging,
 )
-# Устанавливаем MLflow tracking URI
-MLFLOW_TRACKING_URI = "http://192.168.88.6:5500"
-mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
+from config import MLflowConfig as MLflowConfig
+MLcfg = MLflowConfig()
+
 def plot_training_progress(history: dict, save_dir: str, window_size: int) -> None:
     os.makedirs(save_dir, exist_ok=True)
     sns.set_theme(style="whitegrid")
@@ -155,6 +155,8 @@ def plot_training_progress(history: dict, save_dir: str, window_size: int) -> No
         logging.info(f"Saved epsilon-greedy plot: {save_path}")
     else:
         logging.info("No 'epsilons' data available – skipping epsilon plot.")
+
+@mlflow.trace
 def evaluate_agent(
     env: TradingEnvironment,
     agent: D3QN_PER_Agent,
@@ -276,6 +278,9 @@ def plot_test_distributions(test_metrics: dict, plots_dir: str) -> None:
         logging.info(f"Win Rate distribution plot saved: {save_path}")
     else:
         logging.warning("Test_all_win_rate is missing or empty – skipping Win Rate plot.")
+
+
+@mlflow.trace
 def main(cfg: MasterConfig = None):
     cfg = cfg or default_cfg
     timestamp = time.strftime("date_%Y%m%d_time_%H%M%S")
@@ -288,7 +293,9 @@ def main(cfg: MasterConfig = None):
     os.makedirs(models_dir, exist_ok=True)
     os.makedirs(plots_dir, exist_ok=True)
     # MLflow: начало эксперимента
-    mlflow.set_experiment(cfg.project_name)
+    # Устанавливаем MLflow tracking URI
+    mlflow.set_tracking_uri(MLcfg.tracking_uri)
+    mlflow.set_experiment(MLcfg.name_train_experiment)
     with mlflow.start_run(run_name=session_name) as run:
         # Логируем параметры
         mlflow.log_params({
