@@ -4,6 +4,7 @@ import numpy as np
 import talib
 import json
 import os
+import time  # Импортируем модуль time для измерения времени
 from tabulate import tabulate
 from loguru import logger
 
@@ -185,6 +186,10 @@ def apply_strategy(df, config_path=config):
     """
     logger.info("📈 Начало применения торговой стратегии с мульти-таймфреймами")
 
+    # --- Записываем время начала выполнения ---
+    start_time = time.time()
+    # ------------------------------------------
+
     try:
         # Загрузка конфигурации
         config = load_ta_config(config_path)
@@ -261,12 +266,16 @@ def apply_strategy(df, config_path=config):
 
         # Признаки риск-менеджмента (используем параметры из конфига, примененные к 1m данным)
         df_result['take_profit_level'] = df_result['close'] * (
-                    1 + config['risk_management']['take_profit_percent'] / 100)
+                1 + config['risk_management']['take_profit_percent'] / 100)
         df_result['trailing_stop_distance'] = df_result['close'] * (
-                    config['risk_management']['trailing_stop_percent'] / 100)
+                config['risk_management']['trailing_stop_percent'] / 100)
         df_result['commission'] = config['risk_management']['commission_percent'] / 100
 
-        logger.success("✅ Стратегия с мульти-таймфреймами успешно применена")
+        # --- Записываем время окончания и вычисляем длительность ---
+        end_time = time.time()
+        execution_time = end_time - start_time
+        logger.success(f"✅ Стратегия с мульти-таймфреймами успешно применена за {execution_time:.2f} секунд")
+        # ----------------------------------------------------------
 
         # Превью результата
         logger.info("📋 Результат стратегии (последние 10 строк):")
@@ -279,5 +288,10 @@ def apply_strategy(df, config_path=config):
         return df_result
 
     except Exception as e:
-        logger.error(f"❌ Ошибка при применении стратегии с мульти-таймфреймами: {str(e)}")
+        # --- В случае ошибки также можно залогировать время (до возникновения ошибки) ---
+        end_time = time.time()
+        execution_time = end_time - start_time
+        logger.error(
+            f"❌ Ошибка при применении стратегии с мульти-таймфреймами (выполнено за {execution_time:.2f} секунд): {str(e)}")
+        # ----------------------------------------------------------------------------------
         raise

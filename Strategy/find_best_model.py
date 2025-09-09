@@ -113,8 +113,8 @@ def display_runs_preview(runs, experiment, top_n=10):
 
     # Добавляем колонку со ссылками на запуски
     if 'run_id' in preview_df.columns:
-        tracking_uri = MLFLOW_TRACKING_URI.rstrip('/')
-        experiment_id = experiment.experiment_id
+        tracking_uri = settings.tracking_uri
+        experiment_id = settings.name_train_experiment
         preview_df['run_link'] = preview_df['run_id'].apply(
             lambda run_id: f"{tracking_uri}/#/experiments/{experiment_id}/runs/{run_id}"
         )
@@ -163,8 +163,8 @@ def find_best_model_by_win_rates(runs, experiment):
         best_run_date = 'N/A'
 
     # Формируем ссылку на лучший запуск
-    tracking_uri = MLFLOW_TRACKING_URI.rstrip('/')
-    experiment_id = experiment.experiment_id
+    tracking_uri = settings.tracking_uri
+    experiment_id = settings.name_train_experiment
     best_run_link = f"{tracking_uri}/#/experiments/{experiment_id}/runs/{best_run_id}"
 
     logger.success(f"🏆 Лучшая модель найдена!")

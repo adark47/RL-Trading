@@ -90,7 +90,7 @@ class SequenceConfig(BaseModel):
     post_signal_len: int = 60
     agent_history_len: int = 30
     agent_session_len: int = 10
-    action_history_len: int = 5
+    action_history_len: int = 5         # <--- Default is 5
 
     @property
     def num_features(self) -> int:
