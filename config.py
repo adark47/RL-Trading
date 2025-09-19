@@ -58,27 +58,16 @@ class PathConfig(BaseModel):
 
 class DataConfig(BaseModel):
     expected_channels: List[str] = ['open', 'high', 'low', 'close', 'volume',
-                                    'atr', 'vol_ma', 'volume_confirmation', 'hma', 'upper_band', 'lower_band',
-                                    'entries_1m', 'exits_1m',
-                                    'entries_5m', 'exits_5m',
-                                    'entries_15m', 'exits_15m',
-                                    'entries', 'exits', 'norm_atr',
-                                    'price_position', 'take_profit_level', 'trailing_stop_distance', 'commission'
+                                    'long_entries', 'long_exits', 'short_entries', 'short_exits'
                                    ]
 
     data_channels: List[str] = expected_channels.copy()
 
     price_channels: List[str] = ['open', 'high', 'low', 'close']
 
-    volume_channels: List[str] = ['volume', 'atr', 'vol_ma', 'volume_confirmation', 'norm_atr']
+    volume_channels: List[str] = ['volume']
 
-    other_channels: List[str] = ['hma', 'upper_band', 'lower_band',
-                                 'entries_1m', 'exits_1m',
-                                 'entries_5m', 'exits_5m',
-                                 'entries_15m', 'exits_15m',
-                                 'entries', 'exits',
-                                 'price_position', 'take_profit_level', 'trailing_stop_distance', 'commission'
-                                 ]
+    other_channels: List[str] = ['long_entries', 'long_exits', 'short_entries', 'short_exits']
 
     plot_examples: int = 1
     plot_channel_idx: int = 4
@@ -281,22 +270,33 @@ class MLflowConfig(BaseModel):
 
 
 class StrategyConfig(BaseModel):
-    api_key: str = "jxur4R4PVH8FL7vx92"
-    api_secret: str = "1KnNppfPZM1fjz46iZbS7WYw2uorjlM7CMru"
+
+    api_key: str = 'VJg54Xyh6cjh5sCgLw'
+    api_secret: str = 'GE0gRSbWW7cq8ZfP4z3XbFqebVTVaUskWRn1'
+
+# Demo
+#    api_key: str = 'TBDJCda0JZpgtcqUHO'
+#    api_secret: str = 'aahSD4N0ZZxAioohxTxeyLsXHjrt6tZpcRxM'
 
     trader_id_live: str = 'LIVE-001-DOGEUSDT'
     trader_id_backtest: str = 'BACKTEST-001-DOGEUSDT'
 
-    product_type: str = 'LINEAR'               # SPOT/LINEAR
+    product_type: str = 'SPOT'               # SPOT/LINEAR
     symbol: str = 'DOGEUSDT'
 
-    trade_size: int = 5
+    trade_size: int = 1
 
     timeout_connection: float = 30.0
     timeout_reconciliation: float = 20.0
     timeout_portfolio: float = 20.0
     timeout_disconnection: float = 20.0
     timeout_post_stop: float = 5.0
+
+class PGConfig(BaseModel):
+    DB_HOST: str = "192.168.88.6"
+    DB_PORT: int = "5432"
+    DB_USER: str = "admin"
+    DB_PASSWORD: str = "password"
 
 
 #: float = 0.01

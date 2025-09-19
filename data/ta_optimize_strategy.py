@@ -11,7 +11,19 @@ from config import DataPreprocessingConfig as DataPreprocessingConfig
 # Создаем экземпляр конфигурации
 settings = DataPreprocessingConfig()
 
-import pandas as pd
+import platform
+
+try:
+    # Пытаемся импортировать fireducks.pandas только на Linux
+    if platform.system().lower() == 'linux':
+        import fireducks.pandas as pd
+        print("Загружен fireducks.pandas")
+    else:
+        raise ImportError
+except ImportError:
+    import pandas as pd
+    print("Загружен стандартный pandas")
+
 import numpy as np
 import json
 import os

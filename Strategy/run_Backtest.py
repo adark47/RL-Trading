@@ -11,8 +11,11 @@ settings = StrategyConfig()
 
 from decimal import Decimal
 
-from strategy import RLStrategy
-from strategy import RLStrategyConfig
+from strategy_v2 import Strategy
+from strategy_v2 import StrategyConfig
+
+#from strategy import Strategy
+#from strategy import StrategyConfig
 
 from data_provider import prepare_data_1min
 from nautilus_trader.indicators.average.moving_average import MovingAverageType
@@ -76,14 +79,15 @@ if __name__ == "__main__":
     # ----------------------------------------------------------------------------------
 
     # Create strategy configuration with proper warmup_bars
-    strategy_config = RLStrategyConfig(
+    strategy_config = StrategyConfig(
         instrument_id=_instrument.id,               # Используем instrument.id вместо всего объекта instrument
         primary_bar_type=_1min_bartype,
         trade_size=Decimal(settings.trade_size),    # taken from settings
+        trade_mode="BACKTEST"  # "BACKTEST" или "LIVE"
     )
 
     # Create and register the strategy
-    strategy = RLStrategy(config=strategy_config)
+    strategy = Strategy(config=strategy_config)
     engine.add_strategy(strategy)
 
     # Execute the backtest

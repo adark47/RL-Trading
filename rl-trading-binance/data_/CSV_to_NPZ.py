@@ -1,5 +1,15 @@
 from loguru import logger
-import pandas as pd
+import platform
+try:
+    # Пытаемся импортировать fireducks.pandas только на Linux
+    if platform.system().lower() == 'linux':
+        import fireducks.pandas as pd
+        print("Загружен fireducks.pandas")
+    else:
+        raise ImportError
+except ImportError:
+    import pandas as pd
+    print("Загружен стандартный pandas")
 import numpy as np
 from datetime import datetime
 from typing import Dict, List, Tuple

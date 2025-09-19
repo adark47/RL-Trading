@@ -1,8 +1,20 @@
 # ta_stats.py
 
-import pandas as pd
+import platform
+
+try:
+    # Пытаемся импортировать fireducks.pandas только на Linux
+    if platform.system().lower() == 'linux':
+        import fireducks.pandas as pd
+        print("Загружен fireducks.pandas")
+    else:
+        raise ImportError
+except ImportError:
+    import pandas as pd
+    print("Загружен стандартный pandas")
+
 import numpy as np
-from tabulate import tabulate
+from tabulate import tabulate  # Импортируем tabulate
 from loguru import logger
 from datetime import datetime, timedelta
 import sys
@@ -118,9 +130,55 @@ def load_data_from_arcticdb():
 
 
 # -------------------------------
+# Функция для подсчета сигналов и вывода таблицы
+# -------------------------------
+def count_and_display_signals(df):
+    """
+    Подсчитывает количество сигналов и выводит их в виде таблицы.
+    """
+    logger.info("🔢 Подсчет сигналов...")
+    try:
+        signal_columns = ['long_entries', 'long_exits', 'short_entries', 'short_exits']
+
+        # Проверяем наличие колонок
+        missing_cols = [col for col in signal_columns if col not in df.columns]
+        if missing_cols:
+            logger.warning(f"⚠️ Следующие колонки сигналов отсутствуют в данных: {missing_cols}")
+            # Создаем их с False, если отсутствуют
+            for col in missing_cols:
+                df[col] = False
+
+        # Подсчитываем True значения в каждой колонке
+        signal_counts = {col: df[col].sum() if col in df.columns else 0 for col in signal_columns}
+
+        # Подготавливаем данные для таблицы
+        table_data = [
+            ["Сигнал", "Количество"],
+            ["long_entries", signal_counts.get('long_entries', 0)],
+            ["long_exits", signal_counts.get('long_exits', 0)],
+            ["short_entries", signal_counts.get('short_entries', 0)],
+            ["short_exits", signal_counts.get('short_exits', 0)],
+        ]
+
+        # Выводим таблицу с использованием tabulate
+        table_str = tabulate(table_data, headers='firstrow', tablefmt='grid')
+        logger.info(f"📊 Таблица подсчета сигналов:\n{table_str}")
+
+        return signal_counts
+
+    except Exception as e:
+        logger.error(f"❌ Ошибка при подсчете сигналов: {str(e)}")
+        raise
+
+
+# -------------------------------
 # Функция для генерации статистики с использованием vectorbt
 # -------------------------------
 def generate_strategy_stats(df):
+    """
+    Генерация статистики стратегии с использованием vectorbt.
+    Ожидает наличие колонок: 'long_entries', 'long_exits', 'short_entries', 'short_exits'
+    """
     logger.info("📊 Генерация статистики стратегии с использованием vectorbt")
 
     try:
@@ -149,26 +207,38 @@ def generate_strategy_stats(df):
 
         logger.info(f"📈 Частота данных определена как: {freq}")
 
-        # Проверим, что сигналы существуют в DataFrame
-        if 'entries' not in df.columns or 'exits' not in df.columns:
-            logger.error("❌ В DataFrame отсутствуют столбцы 'entries' или 'exits'")
-            raise ValueError("В DataFrame отсутствуют столбцы 'entries' или 'exits'")
+        # --- Изменения здесь ---
+        # Проверим, что необходимые колонки сигналов существуют в DataFrame
+        required_signal_columns = ['long_entries', 'long_exits', 'short_entries', 'short_exits']
+        missing_columns = [col for col in required_signal_columns if col not in df.columns]
+        if missing_columns:
+            logger.error(f"❌ В DataFrame отсутствуют следующие необходимые столбцы сигналов: {missing_columns}")
+            raise ValueError(f"В DataFrame отсутствуют следующие необходимые столбцы сигналов: {missing_columns}")
+        # --- Конец изменений ---
 
-        # Создаем портфель с правильной частотой
+        # --- Изменения здесь ---
+        # Создаем портфель с сигналами Long & Short
+        # Используем from_signals с параметрами для long и short позиций
         portfolio = vbt.Portfolio.from_signals(
             close=df['close'],
-            entries=df['entries'],
-            exits=df['exits'],
+            entries=df['long_entries'],  # Сигналы открытия длинных позиций
+            exits=df['long_exits'],  # Сигналы закрытия длинных позиций
+            short_entries=df['short_entries'],  # Сигналы открытия коротких позиций
+            short_exits=df['short_exits'],  # Сигналы закрытия коротких позиций
             freq=freq,  # Явно указываем частоту
             init_cash=10000,
-            fees=0.001  # Комиссии 0.1%
+            fees=0.0004,  # Комиссии 0.04% (0.1% было в оригинале, скорректировал как в комментарии)
+            # --- Дополнительные параметры для управления капиталом ---
+            # cash_sharing=True,             # Если нужно использовать общий капитал для всех символов (для мульти-ассет)
+            # exclusive_orders=True,         # Если нужно предотвращать одновременные лонг и шорт позиции (опционально)
         )
+        # --- Конец изменений ---
 
         # Генерация статистики
         stats = portfolio.stats()
 
         # Вывод статистики
-        logger.info("📈 Статистика портфеля:")
+        logger.info("📈 Статистика портфеля (Long & Short):")
         logger.info(f"\n{stats}")
 
         return stats, portfolio
@@ -199,6 +269,11 @@ if __name__ == "__main__":
         logger.info(f"📊 Размер данных: {df_result.shape} (строк: {df_result.shape[0]}, колонок: {df_result.shape[1]})")
 
         logger.info(f"📋 Список колонок в данных: {list(df_result.columns)}")
+
+        # --- НОВАЯ СТРОКА ---
+        # Подсчет и вывод таблицы сигналов
+        signal_counts = count_and_display_signals(df_result)
+        # --- КОНЕЦ НОВОЙ СТРОКИ ---
 
         # Генерация статистики с использованием vectorbt
         stats, portfolio = generate_strategy_stats(df_result)

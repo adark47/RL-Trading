@@ -11,7 +11,17 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import matplotlib.pyplot as plt
 import numpy as np
-import pandas as pd
+import platform
+try:
+    # Пытаемся импортировать fireducks.pandas только на Linux
+    if platform.system().lower() == 'linux':
+        import fireducks.pandas as pd
+        print("Загружен fireducks.pandas")
+    else:
+        raise ImportError
+except ImportError:
+    import pandas as pd
+    print("Загружен стандартный pandas")
 import seaborn as sns
 import torch
 from tqdm import tqdm

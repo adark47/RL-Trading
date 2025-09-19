@@ -28,8 +28,8 @@ os.makedirs(opt_dir, exist_ok=True)
 
 # Исправлено: заменен .dict() на .model_dump() для Pydantic V2
 with open(os.path.join(opt_dir, "orig_master_cfg.json"), "w") as f:
-    # json.dump(base_cfg.dict(), f, indent=2, default=str) # Старая версия
-    json.dump(base_cfg.model_dump(), f, indent=2, default=str) # Новая версия
+     json.dump(base_cfg.dict(), f, indent=2, default=str) # Старая версия
+#    json.dump(base_cfg.model_dump(), f, indent=2, default=str) # Новая версия
 
 setup_logging(session_name=session_name, cfg=base_cfg)
 

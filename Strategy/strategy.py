@@ -1,9 +1,22 @@
+# strategy.py
+
 import os
 import sys
 from decimal import Decimal
 from datetime import datetime, timedelta
 import numpy as np
-import pandas as pd
+import platform
+try:
+    # Пытаемся импортировать fireducks.pandas только на Linux
+    if platform.system().lower() == 'linux':
+        import fireducks.pandas as pd
+        print("Загружен fireducks.pandas")
+    else:
+        raise ImportError
+except ImportError:
+    import pandas as pd
+    print("Загружен стандартный pandas")
+
 import torch
 from nautilus_trader.common.enums import LogColor
 from nautilus_trader.config import StrategyConfig
@@ -16,7 +29,8 @@ from nautilus_trader.model.orders import MarketOrder
 from nautilus_trader.model.identifiers import InstrumentId, ClientOrderId, PositionId
 from nautilus_trader.model.objects import Price, Quantity
 from nautilus_trader.trading.strategy import Strategy
-from nautilus_trader.core.rust.model import OrderSide # Убедиться, что импорты правильные
+from nautilus_trader.core.rust.model import OrderSide
+
 
 # --- Импорты для RL модели ---
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -39,17 +53,22 @@ torch.serialization.add_safe_globals([DuelingQNetwork])
 import collections
 # -------------------------------------------------
 
-class RLStrategyConfig(StrategyConfig, frozen=True):
+# --- Импорт для логирования в файл ---
+import logging
+
+class StrategyConfig(StrategyConfig, frozen=True):
 
     instrument_id: InstrumentId
     primary_bar_type: BarType
     trade_size: Decimal
+    trade_mode: str
     model_path: str = 'final.pth'
+    version: str = 'v2_with_RL_based_TA'
 
 
-class RLStrategy(Strategy):
+class Strategy(Strategy):
 
-    def __init__(self, config: RLStrategyConfig): # Уточнение типа
+    def __init__(self, config: StrategyConfig): # Уточнение типа
         """
         Initialize the RL strategy.
 
@@ -59,6 +78,7 @@ class RLStrategy(Strategy):
             The strategy configuration.
         """
         super().__init__(config)
+        self.version = config.version
         self.instrument_id = config.instrument_id
         self.bar_type = config.primary_bar_type
         self.trade_size = config.trade_size
@@ -68,7 +88,7 @@ class RLStrategy(Strategy):
         # --- Оптимизация: Используем deque вместо DataFrame для буфера баров ---
         # Для экономии памяти и повышения эффективности добавления/удаления
         # Определяем максимальный размер буфера (немного больше, чем нужно для TA)
-        buffer_size_for_ta = max(150, configs.alpha.cfg.seq.full_seq_len + 10) # Пример, адаптируйте при необходимости
+        buffer_size_for_ta = max(20000, configs.alpha.cfg.seq.full_seq_len + 10) # Пример, адаптируйте при необходимости
         self.bars_buffer = collections.deque(maxlen=buffer_size_for_ta)
         # -----------------------------------------------------------------------
         self.last_processed_bar_time = None
@@ -85,15 +105,36 @@ class RLStrategy(Strategy):
         # Инициализируем с None
         self.history_actions = [None] * self.action_history_len if self.action_history_len > 0 else []
 
+        # --- Настройка логирования в файл ---
+        self.file_logger = logging.getLogger(f"StrategyFileLogger_{self.id}")  # Используем уникальный ID стратегии
+        # Проверяем, добавлен ли уже обработчик, чтобы избежать дубликатов при сбросе
+        if not self.file_logger.handlers:
+            self.file_logger.setLevel(
+                logging.DEBUG)  # Установите уровень по необходимости (DEBUG, INFO, WARNING, ERROR)
+            # Создаем форматтер
+            formatter = logging.Formatter(
+                fmt='%(asctime)s.%(msecs)03d [%(levelname)s] %(name)s: %(message)s',
+                datefmt='%Y-%m-%dT%H:%M:%S'
+            )
+            # Создаем обработчик для записи в файл
+            # Убедитесь, что директория 'logs' существует
+            log_dir = "logs"
+            if not os.path.exists(log_dir):
+                os.makedirs(log_dir)
+            log_file_path = os.path.join(log_dir, f"strategy_{self.version}.log")  # Файл лога будет в logs/strategy_debug_<strategy_id>.log
+            file_handler = logging.FileHandler(log_file_path, mode='w')  # 'w' для перезаписи при каждом запуске, 'a' для добавления
+            file_handler.setFormatter(formatter)
+            # Добавляем обработчик к логгеру
+            self.file_logger.addHandler(file_handler)
+            # Отключаем распространение логов на родительские логгеры (например, корневой), чтобы избежать дублирования
+            self.file_logger.propagate = False
+        # ------------------------------------
+
 
         self.required_ta_columns = [
             'open', 'high', 'low', 'close', 'volume',
-            'atr', 'vol_ma', 'volume_confirmation', 'hma', 'upper_band', 'lower_band',
-            'entries_1m', 'exits_1m',
-            'entries_5m', 'exits_5m',
-            'entries_15m', 'exits_15m',
-            'entries', 'exits', 'norm_atr',
-            'price_position', 'take_profit_level', 'trailing_stop_distance', 'commission'
+            # Сигналы, на которые мы будем реагировать
+            'long_entries', 'long_exits', 'short_entries', 'short_exits'
         ]
 
     def on_start(self):

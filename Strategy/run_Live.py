@@ -25,7 +25,9 @@ from nautilus_trader.model.identifiers import InstrumentId
 # Исправленный импорт Decimal - используем стандартный модуль decimal
 from decimal import Decimal
 
-from strategy import RLStrategy, RLStrategyConfig
+#from strategy import RLStrategy, RLStrategyConfig
+#from strategy_v2 import Strategy, StrategyConfig
+from strategy_v3 import Strategy, StrategyConfig
 
 # Добавляем родительскую директорию в путь поиска модулей
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -33,8 +35,6 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from config import StrategyConfig as StrategyConfig_
 # Создаем экземпляр конфигурации
 settings = StrategyConfig_()
-
-
 
 def _validate_credentials() -> None:
     """Ensure BYBIT API credentials are available before starting the node."""
@@ -49,16 +49,18 @@ def build_node() -> TradingNode:
 
     # SPOT/LINEAR product type and symbol
     product_type = BybitProductType.LINEAR
+#    product_type = BybitProductType.SPOT
     symbol = f"{settings.symbol}-{product_type.value.upper()}"
 
     # Strategy configuration -------------------------------------------------
     # Создаем InstrumentId напрямую
     instrument_id = InstrumentId.from_str(f"{symbol}.BYBIT")
 
-    strat_config = RLStrategyConfig(
+    strat_config = StrategyConfig(
         instrument_id=instrument_id,                    # Передаем instrument_id вместо instrument
         primary_bar_type=BarType.from_str(f"{symbol}.BYBIT-1-MINUTE-LAST-EXTERNAL"),
         trade_size=Decimal(settings.trade_size),  # taken from settings
+        trade_mode="LIVE"  # "BACKTEST" или "LIVE"
     )
 
     instrument_provider_cfg = InstrumentProviderConfig(load_all=True)
@@ -68,13 +70,14 @@ def build_node() -> TradingNode:
         trader_id=TraderId(settings.trader_id_live),
         logging=LoggingConfig(log_level="INFO", use_pyo3=True),
         exec_engine=LiveExecEngineConfig(
-            reconciliation=True,
+            reconciliation=False,
             reconciliation_lookback_mins=1440,
         ),
         data_clients={
             "BYBIT": BybitDataClientConfig(
                 api_key=settings.api_key,
                 api_secret=settings.api_secret,
+#F                base_url_http="https://api-demo.bybit.com",
                 base_url_http=None,
                 instrument_provider=instrument_provider_cfg,
                 product_types=[product_type],
@@ -85,6 +88,7 @@ def build_node() -> TradingNode:
             "BYBIT": BybitExecClientConfig(
                 api_key=settings.api_key,
                 api_secret=settings.api_secret,
+#                base_url_http="https://api-demo.bybit.com",
                 base_url_http=None,
                 base_url_ws_private=None,
                 instrument_provider=instrument_provider_cfg,
@@ -103,7 +107,7 @@ def build_node() -> TradingNode:
 
     # Build and return the node ---------------------------------------------
     node = TradingNode(config=node_config)
-    node.trader.add_strategy(RLStrategy(config=strat_config))
+    node.trader.add_strategy(Strategy(config=strat_config))
     node.add_data_client_factory("BYBIT", BybitLiveDataClientFactory)
     node.add_exec_client_factory("BYBIT", BybitLiveExecClientFactory)
     node.build()

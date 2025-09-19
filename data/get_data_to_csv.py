@@ -10,7 +10,19 @@ from config import DataPreprocessingConfig as DataPreprocessingConfig
 settings = DataPreprocessingConfig()
 
 import requests
-import pandas as pd
+import platform
+
+try:
+    # Пытаемся импортировать fireducks.pandas только на Linux
+    if platform.system().lower() == 'linux':
+        import fireducks.pandas as pd
+        print("Загружен fireducks.pandas")
+    else:
+        raise ImportError
+except ImportError:
+    import pandas as pd
+    print("Загружен стандартный pandas")
+
 import datetime
 import time
 import sys

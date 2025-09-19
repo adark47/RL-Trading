@@ -2,7 +2,17 @@
 
 import sys
 import os
-import pandas as pd
+import platform
+try:
+    # Пытаемся импортировать fireducks.pandas только на Linux
+    if platform.system().lower() == 'linux':
+        import fireducks.pandas as pd
+        print("Загружен fireducks.pandas")
+    else:
+        raise ImportError
+except ImportError:
+    import pandas as pd
+    print("Загружен стандартный pandas")
 from nautilus_trader import TEST_DATA_DIR
 from nautilus_trader.model.data import Bar
 from nautilus_trader.model.data import BarType

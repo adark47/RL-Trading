@@ -1,0 +1,9 @@
+2025-09-11 11:26:01 | INFO     | test_connection:209 - 🚀 Запуск теста подключения к PostgreSQL
+2025-09-11 11:26:01 | INFO     | _attempt_connect:79 - 🔄 Попытка подключения к базе данных: postgres
+2025-09-11 11:26:01 | SUCCESS  | _attempt_connect:94 - ✅ Подключение к PostgreSQL успешно установлено
+2025-09-11 11:26:01 | DEBUG    | _attempt_connect:95 - 📊 Версия PostgreSQL: PostgreSQL 17.6 (Debian 17.6-1.pgdg13+1) on x86_64-pc-linux-gnu, compiled by gcc (Debian 14.2.0-19) 14.2.0, 64-bit
+2025-09-11 11:26:01 | SUCCESS  | test_connection:215 - 🎉 Тест подключения успешно пройден!
+2025-09-11 11:26:01 | INFO     | test_connection:218 - 🔍 Выполнение тестового запроса...
+2025-09-11 11:26:01 | DEBUG    | execute_query:152 - Выполнение запроса: SELECT version() LIMIT 10; с параметрами: None
+2025-09-11 11:26:01 | INFO     | preview_data:196 - 📋 Превью данных (первые 1 строк):
+2025-09-11 11:26:01 | INFO     | disconnect:132 - 🔚 Соединение с базой данных закрыто

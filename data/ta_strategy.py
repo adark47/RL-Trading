@@ -1,5 +1,17 @@
 # ta_strategy.py
-import pandas as pd
+import platform
+
+try:
+    # Пытаемся импортировать fireducks.pandas только на Linux
+    if platform.system().lower() == 'linux':
+        import fireducks.pandas as pd
+        print("Загружен fireducks.pandas")
+    else:
+        raise ImportError
+except ImportError:
+    import pandas as pd
+    print("Загружен стандартный pandas")
+
 import numpy as np
 import talib
 import json
@@ -78,6 +90,7 @@ def hma(series, period):
 def apply_strategy_single_timeframe(df, config):
     """
     Применение торговой стратегии к одному датафрейму (один таймфрейм)
+    Генерирует сигналы long и short.
 
     Args:
         df (pd.DataFrame): DataFrame с данными OHLC и объемами для одного таймфрейма
@@ -112,9 +125,16 @@ def apply_strategy_single_timeframe(df, config):
     df['upper_band'] = df['hma'] + (df['atr'] * config['bands']['multiplier'])
     df['lower_band'] = df['hma'] - (df['atr'] * config['bands']['multiplier'])
 
-    # Генерация бинарных сигналов (1 - сигнал, 0 - отсутствие сигнала)
-    df['entries'] = ((df['close'] > df['upper_band']) & (df['volume_confirmation'] == 1)).astype(int)
-    df['exits'] = ((df['close'] < df['lower_band']) | (df['close'] < df['hma'])).astype(int)
+    # --- Генерация бинарных сигналов Long ---
+    df['long_entries'] = ((df['close'] > df['upper_band']) & (df['volume_confirmation'] == 1)).astype(int)
+    # Выход из лонга: цена ниже нижней границы ИЛИ ниже HMA
+    df['long_exits'] = ((df['close'] < df['lower_band']) | (df['close'] < df['hma'])).astype(int)
+
+    # --- Генерация бинарных сигналов Short ---
+    # Вход в шорт: цена ниже нижней границы И подтверждение объемом
+    df['short_entries'] = ((df['close'] < df['lower_band']) & (df['volume_confirmation'] == 1)).astype(int)
+    # Выход из шорта: цена выше верхней границы ИЛИ выше HMA
+    df['short_exits'] = ((df['close'] > df['upper_band']) | (df['close'] > df['hma'])).astype(int)
 
     return df
 
@@ -176,6 +196,7 @@ def apply_strategy(df, config_path=config):
     """
     Применение торговой стратегии с техническими индикаторами и риск-менеджментом
     Включает сигналы со старших таймфреймов (5m, 15m) для 1-минутных данных.
+    Генерирует отдельные сигналы long и short для vectorbt.
 
     Args:
         df (pd.DataFrame): DataFrame с данными OHLC и объемами (ожидается 1-минутный таймфрейм)
@@ -183,8 +204,9 @@ def apply_strategy(df, config_path=config):
 
     Returns:
         pd.DataFrame: DataFrame с добавленными индикаторами и сигналами для 1-минутного таймфрейма
+                     (колонки: date, open, high, low, close, volume, long_entries, long_exits, short_entries, short_exits)
     """
-    logger.info("📈 Начало применения торговой стратегии с мульти-таймфреймами")
+    logger.info("📈 Начало применения торговой стратегии с мульти-таймфреймами (Long & Short)")
 
     # --- Записываем время начала выполнения ---
     start_time = time.time()
@@ -201,21 +223,36 @@ def apply_strategy(df, config_path=config):
         df_1m['date'] = pd.to_datetime(df_1m['date'])
         df_1m_with_signals = apply_strategy_single_timeframe(df_1m, config)
         # Переименуем сигналы для ясности
-        df_1m_with_signals.rename(columns={'entries': 'entries_1m', 'exits': 'exits_1m'}, inplace=True)
+        df_1m_with_signals.rename(columns={
+            'long_entries': 'long_entries_1m',
+            'long_exits': 'long_exits_1m',
+            'short_entries': 'short_entries_1m',
+            'short_exits': 'short_exits_1m'
+        }, inplace=True)
         logger.info("✅ Сигналы сгенерированы для 1-минутного таймфрейма")
 
         # --- 2. Ресемплинг до 5-минутного таймфрейма ---
         df_5m = resample_to_timeframe(df, '5min')
         # --- 3. Применение стратегии к 5-минутному таймфрейму ---
         df_5m_with_signals = apply_strategy_single_timeframe(df_5m, config)
-        df_5m_with_signals.rename(columns={'entries': 'entries_5m', 'exits': 'exits_5m'}, inplace=True)
+        df_5m_with_signals.rename(columns={
+            'long_entries': 'long_entries_5m',
+            'long_exits': 'long_exits_5m',
+            'short_entries': 'short_entries_5m',
+            'short_exits': 'short_exits_5m'
+        }, inplace=True)
         logger.info("✅ Сигналы сгенерированы для 5-минутного таймфрейма")
 
         # --- 4. Ресемплинг до 15-минутного таймфрейма ---
         df_15m = resample_to_timeframe(df, '15min')
         # --- 5. Применение стратегии к 15-минутному таймфрейму ---
         df_15m_with_signals = apply_strategy_single_timeframe(df_15m, config)
-        df_15m_with_signals.rename(columns={'entries': 'entries_15m', 'exits': 'exits_15m'}, inplace=True)
+        df_15m_with_signals.rename(columns={
+            'long_entries': 'long_entries_15m',
+            'long_exits': 'long_exits_15m',
+            'short_entries': 'short_entries_15m',
+            'short_exits': 'short_exits_15m'
+        }, inplace=True)
         logger.info("✅ Сигналы сгенерированы для 15-минутного таймфрейма")
 
         # --- 6. Синхронизация сигналов со старших таймфреймов на 1-минутный ---
@@ -229,32 +266,48 @@ def apply_strategy(df, config_path=config):
         df_15m_with_signals['date'] = pd.to_datetime(df_15m_with_signals['date'])
 
         # Синхронизация 5-минутных сигналов
-        df_result = df_result.merge(df_5m_with_signals[['date', 'entries_5m', 'exits_5m']],
+        df_result = df_result.merge(df_5m_with_signals[['date', 'long_entries_5m', 'long_exits_5m', 'short_entries_5m', 'short_exits_5m']],
                                     on='date', how='left')
         # Заполнение вперед (ffill) для распространения последнего сигнала 5m
-        df_result['entries_5m'] = df_result['entries_5m'].ffill().fillna(0).astype(int)
-        df_result['exits_5m'] = df_result['exits_5m'].ffill().fillna(0).astype(int)
+        signal_cols_5m = ['long_entries_5m', 'long_exits_5m', 'short_entries_5m', 'short_exits_5m']
+        df_result[signal_cols_5m] = df_result[signal_cols_5m].ffill().fillna(0).astype(int)
 
         # Синхронизация 15-минутных сигналов
-        df_result = df_result.merge(df_15m_with_signals[['date', 'entries_15m', 'exits_15m']],
+        df_result = df_result.merge(df_15m_with_signals[['date', 'long_entries_15m', 'long_exits_15m', 'short_entries_15m', 'short_exits_15m']],
                                     on='date', how='left')
         # Заполнение вперед (ffill) для распространения последнего сигнала 15m
-        df_result['entries_15m'] = df_result['entries_15m'].ffill().fillna(0).astype(int)
-        df_result['exits_15m'] = df_result['exits_15m'].ffill().fillna(0).astype(int)
+        signal_cols_15m = ['long_entries_15m', 'long_exits_15m', 'short_entries_15m', 'short_exits_15m']
+        df_result[signal_cols_15m] = df_result[signal_cols_15m].ffill().fillna(0).astype(int)
 
         # --- 7. Комбинирование сигналов (логическое И для входов, ИЛИ для выходов) ---
+        # --- Long ---
         # Вход: сигнал должен быть на всех таймфреймах
-        df_result['entries'] = (
-                (df_result['entries_1m'] == 1) &
-                (df_result['entries_5m'] == 1) &
-                (df_result['entries_15m'] == 1)
+        df_result['long_entries'] = (
+                (df_result['long_entries_1m'] == 1) &
+                (df_result['long_entries_5m'] == 1) &
+                (df_result['long_entries_15m'] == 1)
         ).astype(int)
 
         # Выход: сигнал хотя бы на одном таймфрейме
-        df_result['exits'] = (
-                (df_result['exits_1m'] == 1) |
-                (df_result['exits_5m'] == 1) |
-                (df_result['exits_15m'] == 1)
+        df_result['long_exits'] = (
+                (df_result['long_exits_1m'] == 1) |
+                (df_result['long_exits_5m'] == 1) |
+                (df_result['long_exits_15m'] == 1)
+        ).astype(int)
+
+        # --- Short ---
+        # Вход: сигнал должен быть на всех таймфреймах
+        df_result['short_entries'] = (
+                (df_result['short_entries_1m'] == 1) &
+                (df_result['short_entries_5m'] == 1) &
+                (df_result['short_entries_15m'] == 1)
+        ).astype(int)
+
+        # Выход: сигнал хотя бы на одном таймфрейме
+        df_result['short_exits'] = (
+                (df_result['short_exits_1m'] == 1) |
+                (df_result['short_exits_5m'] == 1) |
+                (df_result['short_exits_15m'] == 1)
         ).astype(int)
 
         # --- 8. Добавление дополнительных признаков (рассчитываются на 1m данных) ---
@@ -274,16 +327,19 @@ def apply_strategy(df, config_path=config):
         # --- Записываем время окончания и вычисляем длительность ---
         end_time = time.time()
         execution_time = end_time - start_time
-        logger.success(f"✅ Стратегия с мульти-таймфреймами успешно применена за {execution_time:.2f} секунд")
+        logger.success(f"✅ Стратегия с мульти-таймфреймами (Long & Short) успешно применена за {execution_time:.2f} секунд")
         # ----------------------------------------------------------
+
+        # --- 9. Подготовка финального результата ---
+        # Заполняем NaN нулями (на всякий случай, хотя ffill должен помочь)
+        df_result = df_result.fillna(0)
+
+        # Выбираем только нужные колонки для vectorbt
+        df_result = df_result[['date', 'open', 'high', 'low', 'close', 'volume', 'long_entries', 'long_exits', 'short_entries', 'short_exits']]
 
         # Превью результата
         logger.info("📋 Результат стратегии (последние 10 строк):")
-        logger.info(
-            f"Превью данных: \n{tabulate(df_result.tail(10), headers='keys', tablefmt='psql', floatfmt='.4f', showindex=False)}")
-
-        # Заполняем NaN нулями (на всякий случай, хотя ffill должен помочь)
-        df_result = df_result.fillna(0)
+        logger.info(f"Превью данных: \n{tabulate(df_result.tail(1), headers='keys', tablefmt='psql', floatfmt='.4f', showindex=False)}")
 
         return df_result
 
